@@ -37,6 +37,11 @@ import os
 
 # Model paths (gunakan relative paths untuk portability)
 # Prioritas: best_lstm_final_balanced.h5 (dari training balanced) > model_terbaik.h5
+        try:
+            from PIL import Image
+        except Exception:
+            Image = None
+            print("[INIT] Warning: PIL (Pillow) not available — image features will be limited.")
 MODEL_SEARCH_PATHS = [
     os.path.join('models', 'best_lstm_final_balanced.h5'),  # PRIORITAS: balanced training
     os.path.join('models', 'model_terbaik.h5'),
