@@ -54,7 +54,7 @@ MODEL_SEARCH_PATHS = [
     'model_terbaik.h5',
     'best_lstm_final.h5',
 ]
-BEST_THR_DEFAULT = 0.80  # Threshold 0.80: prob >= 0.80 = likely BULLY, prob < 0.80 = likely NOT BULLY
+BEST_THR_DEFAULT = 0.30  # Threshold 0.30: prob >= 0.30 = likely BULLY, prob < 0.30 = likely NOT BULLY
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
