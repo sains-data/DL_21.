@@ -54,7 +54,7 @@ MODEL_SEARCH_PATHS = [
     'model_terbaik.h5',
     'best_lstm_final.h5',
 ]
-BEST_THR_DEFAULT = 0.50  # Threshold: prob >= 0.50 = BULLY (direct probability, no inversion)
+BEST_THR_DEFAULT = 0.80  # Threshold untuk inverted model: prob_bully >= 0.80 = BULLY (STRICT)
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
@@ -412,12 +412,14 @@ def predict_bully_sentence(text, model=None, tokenizer=tokenizer, maxlen=300, th
     X = pad_sequences(seq, maxlen=maxlen, padding='post', truncating='post')
 
     prob = float(model.predict(X, verbose=0).ravel()[0])
-    # Model outputs probability of BULLYING directly (no inversion!)
-    # prob >= threshold = BULLY, prob < threshold = NOT BULLY
-    label = "BULLY" if prob >= thr else "NOT BULLY"
+    # Model outputs probability of NOT BULLYING (inverted output!)
+    # So we must invert: prob_bully = 1.0 - prob
+    # Then use threshold: prob_bully >= 0.80 = BULLY
+    prob_bully = 1.0 - prob
+    label = "BULLY" if prob_bully >= thr else "NOT BULLY"
 
     # DEBUG LOG
-    print(f"[PREDICT] text='{text}' -> prob_bully={prob:.4f}, thr={thr:.4f}, label={label}")
+    print(f"[PREDICT] text='{text}' -> prob_not_bully={prob:.4f}, prob_bully={prob_bully:.4f}, thr={thr:.4f}, label={label}")
 
     return label, prob, txt_clean, thr
 
@@ -644,7 +646,8 @@ elif page == "🔮 Prediksi":
                     
                 with col_d2:
                     st.write("**Model Result:**")
-                    st.caption(f"Probability (BULLYING): {probability:.4f}")
+                    st.caption(f"Probability (NOT BULLY): {probability:.4f}")
+                    st.caption(f"Probability (BULLY): {(1.0-probability):.4f}")
                     st.caption(f"Threshold: {used_threshold:.4f}")
                     
                 with col_d3:
@@ -670,10 +673,10 @@ elif page == "🔮 Prediksi":
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Confidence Bar - direct probability of NOT BULLYING
+                    # Confidence Bar - untuk NOT BULLY (higher probability = more confident it's safe)
                     st.markdown("### Keyakinan Model")
-                    st.progress(1 - probability)
-                    st.markdown(f"<div style='text-align: center; color: #3FB950; font-size: 20px; font-weight: 600;'>{((1-probability)*100):.1f}% AMAN</div>", unsafe_allow_html=True)
+                    st.progress(probability)
+                    st.markdown(f"<div style='text-align: center; color: #3FB950; font-size: 20px; font-weight: 600;'>{(probability*100):.1f}% AMAN</div>", unsafe_allow_html=True)
                 
                 else:
                     # Bully Result
@@ -686,10 +689,10 @@ elif page == "🔮 Prediksi":
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Confidence Bar - direct probability of BULLYING
+                    # Confidence Bar - untuk BULLY (higher 1-probability = more confident it's bully)
                     st.markdown("### Keyakinan Model")
-                    st.progress(probability)
-                    st.markdown(f"<div style='text-align: center; color: #F78166; font-size: 20px; font-weight: 600;'>{(probability*100):.1f}% BULLYING</div>", unsafe_allow_html=True)
+                    st.progress(1.0 - probability)
+                    st.markdown(f"<div style='text-align: center; color: #F78166; font-size: 20px; font-weight: 600;'>{((1.0-probability)*100):.1f}% BULLYING</div>", unsafe_allow_html=True)
                 
                 # Cleaned Text Preview
                 with st.expander("📄 Teks Setelah Preprocessing"):
