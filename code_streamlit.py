@@ -413,11 +413,10 @@ def predict_bully_sentence(text, model=None, tokenizer=tokenizer, maxlen=300, th
 
     prob = float(model.predict(X, verbose=0).ravel()[0])
     # Model output interpretation:
-    # prob is probability of BULLYING (0 to 1)
-    # prob >= 0.50 → BULLY
-    # prob < 0.50 → NOT BULLY (SAFE)
-    # BUT: threshold is set to a LOW value (0.4) to catch bullying
-    label = "BULLY" if prob >= thr else "NOT BULLY"
+    # prob is probability of SAFETY/NOT-BULLYING (0 to 1)
+    # prob >= 0.30 → likely NOT BULLY (SAFE)
+    # prob < 0.30 → likely BULLY
+    label = "NOT BULLY" if prob >= thr else "BULLY"
 
     # DEBUG LOG
     print(f"[PREDICT] text='{text}' -> prob_bully={prob:.4f}, thr={thr:.4f}, label={label}")
