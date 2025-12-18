@@ -54,7 +54,7 @@ MODEL_SEARCH_PATHS = [
     'model_terbaik.h5',
     'best_lstm_final.h5',
 ]
-BEST_THR_DEFAULT = 0.60  # Threshold untuk inverted model: prob_bully >= 0.60 = BULLY (mengurangi false positive)
+BEST_THR_DEFAULT = 0.75  # Threshold untuk inverted model: prob_bully >= 0.75 = BULLY (strict untuk accuracy)
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
