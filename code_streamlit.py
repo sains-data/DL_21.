@@ -54,7 +54,7 @@ MODEL_SEARCH_PATHS = [
     'model_terbaik.h5',
     'best_lstm_final.h5',
 ]
-BEST_THR_DEFAULT = 0.50  # Threshold 0.50: prob >= 0.50 = BULLY (high safety confidence from model = likely bully)
+BEST_THR_DEFAULT = 0.50  # Threshold 0.50: prob < 0.50 = BULLY (low safety = bullying)
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
@@ -412,13 +412,13 @@ def predict_bully_sentence(text, model=None, tokenizer=tokenizer, maxlen=300, th
     X = pad_sequences(seq, maxlen=maxlen, padding='post', truncating='post')
 
     prob = float(model.predict(X, verbose=0).ravel()[0])
-    # Model outputs probability of SAFETY/NOT BULLYING (prob >= 0.5 means model confident it's SAFE)
-    # But model is BACKWARD for bully words! So: HIGH prob_safety = actually BULLY
-    # Solution: prob >= threshold → BULLY (model's high confidence in safety = actually bully)
-    label = "BULLY" if prob >= thr else "NOT BULLY"
+    # Model outputs probability of SAFETY (NOT BULLYING)
+    # LOW prob = LOW safety = BULLY (prob < 0.50)
+    # HIGH prob = HIGH safety = NOT BULLY (prob >= 0.50)
+    label = "BULLY" if prob < thr else "NOT BULLY"
 
     # DEBUG LOG
-    print(f"[PREDICT] text='{text}' -> prob_safety={prob:.4f}, thr={thr:.4f}, is_bully={prob >= thr}, label={label}")
+    print(f"[PREDICT] text='{text}' -> prob_safety={prob:.4f}, thr={thr:.4f}, is_bully={prob < thr}, label={label}")
 
     return label, prob, txt_clean, thr
 
