@@ -54,7 +54,7 @@ MODEL_SEARCH_PATHS = [
     'model_terbaik.h5',
     'best_lstm_final.h5',
 ]
-BEST_THR_DEFAULT = 0.70  # Threshold untuk inverted model (1.0 - prob): dongo=0.799, saya=0.611
+BEST_THR_DEFAULT = 0.50  # Threshold: prob >= 0.50 = BULLY, prob < 0.50 = NOT BULLY
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
@@ -412,13 +412,12 @@ def predict_bully_sentence(text, model=None, tokenizer=tokenizer, maxlen=300, th
     X = pad_sequences(seq, maxlen=maxlen, padding='post', truncating='post')
 
     prob = float(model.predict(X, verbose=0).ravel()[0])
-    # INVERTED logic: prob is for NOT BULLY class, so invert it
-    # Lower prob = more likely BULLY, higher prob = more likely NOT BULLY
-    prob_bully = 1.0 - prob
-    label = "BULLY" if prob_bully >= thr else "NOT BULLY"
+    # Direct logic: prob is probability of BULLYING
+    # prob >= threshold = BULLY, prob < threshold = NOT BULLY
+    label = "BULLY" if prob >= thr else "NOT BULLY"
 
     # DEBUG LOG
-    print(f"[PREDICT] text='{text}' -> seq={seq} -> prob_raw={prob:.4f}, prob_bully={prob_bully:.4f}, thr={thr:.4f}, BULLY?{prob_bully >= thr}")
+    print(f"[PREDICT] text='{text}' -> prob={prob:.4f}, thr={thr:.4f}, label={label}")
 
     return label, prob, txt_clean, thr
 
@@ -628,9 +627,9 @@ elif page == "🔮 Prediksi":
                     model=model,
                     tokenizer=tokenizer,
                     maxlen=300,
-                    threshold=BEST_THR_DEFAULT  # FORCE 0.4!
+                    threshold=BEST_THR_DEFAULT
                 )
-                prediction = 1 if label_str == "BULLY" else 0
+                is_bully = (label_str == "BULLY")
             
             st.markdown("---")
             
@@ -651,16 +650,16 @@ elif page == "🔮 Prediksi":
                 with col_d3:
                     st.write("**Decision:**")
                     st.caption(f"Label: {label_str}")
-                    if probability >= used_threshold:
-                        st.caption("✓ >= threshold")
+                    if is_bully:
+                        st.caption("✓ BULLY (>= threshold)")
                     else:
-                        st.caption("✗ < threshold")
+                        st.caption("✓ NOT BULLY (< threshold)")
             
             # Result Section
             col1, col2, col3 = st.columns([1, 2, 1])
             
             with col2:
-                if prediction == 0:
+                if not is_bully:
                     # Non-Bully Result
                     st.markdown("""
                     <div class='safe-box'>
