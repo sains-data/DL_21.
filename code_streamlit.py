@@ -54,7 +54,7 @@ MODEL_SEARCH_PATHS = [
     'model_terbaik.h5',
     'best_lstm_final.h5',
 ]
-BEST_THR_DEFAULT = 0.50  # Threshold 0.50: prob < 0.50 = BULLY (low safety = bullying)
+BEST_THR_DEFAULT = 0.80  # Threshold 0.80: prob >= 0.80 = likely BULLY, prob < 0.80 = likely NOT BULLY
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
@@ -413,10 +413,11 @@ def predict_bully_sentence(text, model=None, tokenizer=tokenizer, maxlen=300, th
 
     prob = float(model.predict(X, verbose=0).ravel()[0])
     # Model output interpretation:
-    # prob is probability of SAFETY/NOT-BULLYING (0 to 1)
-    # prob < 0.50 → likely BULLY
-    # prob >= 0.50 → likely NOT BULLY (SAFE)
-    label = "NOT BULLY" if prob >= thr else "BULLY"
+    # prob is probability of BULLYING (0 to 1)
+    # prob >= 0.50 → BULLY
+    # prob < 0.50 → NOT BULLY (SAFE)
+    # BUT: threshold is set to a LOW value (0.4) to catch bullying
+    label = "BULLY" if prob >= thr else "NOT BULLY"
 
     # DEBUG LOG
     print(f"[PREDICT] text='{text}' -> prob_bully={prob:.4f}, thr={thr:.4f}, label={label}")
@@ -674,8 +675,8 @@ elif page == "🔮 Prediksi":
                     
                     # Confidence Bar - probability of SAFETY (NOT BULLY)
                     st.markdown("### Keyakinan Model")
-                    st.progress(probability)
-                    st.markdown(f"<div style='text-align: center; color: #3FB950; font-size: 20px; font-weight: 600;'>{(probability*100):.1f}% AMAN</div>", unsafe_allow_html=True)
+                    st.progress(1.0 - probability)
+                    st.markdown(f"<div style='text-align: center; color: #3FB950; font-size: 20px; font-weight: 600;'>{((1.0-probability)*100):.1f}% AMAN</div>", unsafe_allow_html=True)
                 
                 else:
                     # Bully Result
