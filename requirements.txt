@@ -1,5 +1,6 @@
 streamlit==1.28.2
-tensorflow-cpu==2.15.0
+# Use a TensorFlow build available for the environment (2.20.x found by pip)
+tensorflow-cpu==2.20.0
 numpy==1.25.2
 pandas==2.0.3
 plotly==6.3.1
