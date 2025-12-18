@@ -412,10 +412,11 @@ def predict_bully_sentence(text, model=None, tokenizer=tokenizer, maxlen=300, th
     X = pad_sequences(seq, maxlen=maxlen, padding='post', truncating='post')
 
     prob = float(model.predict(X, verbose=0).ravel()[0])
-    # Standard cyberbullying detection: prob is probability of BULLYING (0 to 1)
-    # prob >= 0.50 → BULLY
-    # prob < 0.50 → NOT BULLY
-    label = "BULLY" if prob >= thr else "NOT BULLY"
+    # Model output interpretation:
+    # prob is probability of SAFETY/NOT-BULLYING (0 to 1)
+    # prob < 0.50 → likely BULLY
+    # prob >= 0.50 → likely NOT BULLY (SAFE)
+    label = "NOT BULLY" if prob >= thr else "BULLY"
 
     # DEBUG LOG
     print(f"[PREDICT] text='{text}' -> prob_bully={prob:.4f}, thr={thr:.4f}, label={label}")
@@ -645,7 +646,7 @@ elif page == "🔮 Prediksi":
                     
                 with col_d2:
                     st.write("**Model Result:**")
-                    st.caption(f"Probability (SAFETY/AMAN): {probability:.4f}")
+                    st.caption(f"Probability (SAFETY): {probability:.4f}")
                     st.caption(f"Threshold: {used_threshold:.4f}")
                     
                 with col_d3:
@@ -673,8 +674,8 @@ elif page == "🔮 Prediksi":
                     
                     # Confidence Bar - probability of SAFETY (NOT BULLY)
                     st.markdown("### Keyakinan Model")
-                    st.progress(1.0 - probability)
-                    st.markdown(f"<div style='text-align: center; color: #3FB950; font-size: 20px; font-weight: 600;'>{((1.0-probability)*100):.1f}% AMAN</div>", unsafe_allow_html=True)
+                    st.progress(probability)
+                    st.markdown(f"<div style='text-align: center; color: #3FB950; font-size: 20px; font-weight: 600;'>{(probability*100):.1f}% AMAN</div>", unsafe_allow_html=True)
                 
                 else:
                     # Bully Result
