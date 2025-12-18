@@ -54,7 +54,7 @@ MODEL_SEARCH_PATHS = [
     'model_terbaik.h5',
     'best_lstm_final.h5',
 ]
-BEST_THR_DEFAULT = 0.30  # Threshold 0.30: prob >= 0.30 = likely BULLY, prob < 0.30 = likely NOT BULLY
+BEST_THR_DEFAULT = 0.50  # Threshold 0.50: prob < 0.50 = BULLY, prob >= 0.50 = NOT BULLY (SAFE)
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
@@ -414,9 +414,9 @@ def predict_bully_sentence(text, model=None, tokenizer=tokenizer, maxlen=300, th
     prob = float(model.predict(X, verbose=0).ravel()[0])
     # Model output interpretation:
     # prob is probability of SAFETY/NOT-BULLYING (0 to 1)
-    # prob >= 0.30 → likely NOT BULLY (SAFE)
-    # prob < 0.30 → likely BULLY
-    label = "NOT BULLY" if prob >= thr else "BULLY"
+    # prob > threshold → likely NOT BULLY (SAFE) 
+    # prob <= threshold → likely BULLY
+    label = "BULLY" if prob < thr else "NOT BULLY"
 
     # DEBUG LOG
     print(f"[PREDICT] text='{text}' -> prob_bully={prob:.4f}, thr={thr:.4f}, label={label}")
