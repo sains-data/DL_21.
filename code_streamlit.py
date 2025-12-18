@@ -1,4 +1,9 @@
 import streamlit as st
+
+# Initialize session state
+if "first_load" not in st.session_state:
+    st.session_state.first_load = True
+
 def _pad_sequences_fallback(sequences, maxlen, padding='post', truncating='post'):
     """Simple numpy-based pad_sequences replacement for demo mode."""
     arr = np.zeros((len(sequences), maxlen), dtype=int)
