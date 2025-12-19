@@ -54,7 +54,7 @@ MODEL_SEARCH_PATHS = [
     os.path.join('models', 'model_terbaik.h5'),
     os.path.join('models', 'best_lstm_final.h5'),
 ]
-BEST_THR_DEFAULT = 0.46755287051200867  # Optimal threshold dari F1 curve (prob < thr = BULLY)
+BEST_THR_DEFAULT = 0.40  # Optimal threshold (prob >= 0.40 = BULLY)
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
@@ -349,8 +349,8 @@ try:
     params['threshold'] = float(params.get('threshold', 0.4))
 except Exception:
     params['threshold'] = 0.4
-# simpan threshold global ala notebook
-best_thr = params.get('threshold', BEST_THR_DEFAULT)
+# simpan threshold global - ALWAYS 0.40!
+best_thr = 0.40
 
 # ==========================================
 # LOAD STOPWORDS FOR PREPROCESSING
@@ -417,6 +417,9 @@ def predict_cyberbullying(text, model=None, tokenizer=None, maxlen=300, threshol
         threshold = float(threshold)
     except:
         threshold = BEST_THR_DEFAULT
+    
+    # Force threshold 0.40 (CRITICAL!)
+    threshold = 0.40
     
     # Validasi model dan tokenizer tersedia
     if model is None:
