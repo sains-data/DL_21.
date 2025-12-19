@@ -45,16 +45,16 @@ except Exception:
 import os
 
 # Model paths (gunakan relative paths untuk portability)
-# Prioritas: best_lstm_final_balanced.h5 (dari training balanced) > model_terbaik.h5
+# Prioritas: best_lstm_final_balanced.h5 (dari training balanced) di ROOT
 MODEL_SEARCH_PATHS = [
-    os.path.join('models', 'best_lstm_final_balanced.h5'),  # PRIORITAS: balanced training
-    os.path.join('models', 'model_terbaik.h5'),
-    os.path.join('models', 'best_lstm_final.h5'),
-    'best_lstm_final_balanced.h5',
+    'best_lstm_final_balanced.h5',  # PRIORITAS: balanced training di root
     'model_terbaik.h5',
     'best_lstm_final.h5',
+    os.path.join('models', 'best_lstm_final_balanced.h5'),
+    os.path.join('models', 'model_terbaik.h5'),
+    os.path.join('models', 'best_lstm_final.h5'),
 ]
-BEST_THR_DEFAULT = 0.50  # Threshold 0.50: prob < 0.50 = BULLY, prob >= 0.50 = NOT BULLY (SAFE)
+BEST_THR_DEFAULT = 0.46755287051200867  # Optimal threshold dari F1 curve (prob < thr = BULLY)
 try:
     from download_model import ensure_model  # type: ignore  # allow running even if helper module is absent
 except Exception:
@@ -71,6 +71,7 @@ print("="*80)
 
 GLOBAL_TOKENIZER = None
 tokenizer_init_paths = [
+    'tokenizer_for_model_terbaik.pickle',  # PRIORITAS: di root
     os.path.join('exports', 'tokenizer_for_model_terbaik.pickle'),
     os.path.join('exports', 'tokenizer_latest.pickle'),
     'tokenizer.pickle',
@@ -281,7 +282,8 @@ def load_resources():
     # Load model params
     params = None
     params_paths = [
-        'model_params.pickle', 
+        'model_params.pickle',
+        os.path.join('exports', 'model_params.pickle'),
         os.path.join('models', 'model_params.pickle'),
     ]
     for pp in params_paths:
@@ -289,8 +291,10 @@ def load_resources():
             try:
                 with open(pp, 'rb') as handle:
                     params = pickle.load(handle)
+                print(f"[LOAD] [OK] Params loaded from: {pp}")
                 break
-            except Exception:
+            except Exception as e:
+                print(f"[LOAD] [FAIL] Failed to load {pp}: {e}")
                 params = None
 
     return model, tokenizer, params, demo_mode, tf_error
@@ -349,10 +353,21 @@ except Exception:
 best_thr = params.get('threshold', BEST_THR_DEFAULT)
 
 # ==========================================
+# LOAD STOPWORDS FOR PREPROCESSING
+# ==========================================
+STOP_WORDS = set()
+try:
+    from nltk.corpus import stopwords
+    STOP_WORDS = set(stopwords.words('indonesian'))
+    print(f"[INIT] Stopwords loaded: {len(STOP_WORDS)} words")
+except Exception as e:
+    print(f"[INIT] Warning: Stopwords not loaded: {e}")
+
+# ==========================================
 # FUNGSI PREPROCESSING & PREDIKSI
 # ==========================================
 def clean_text(text):
-    """Preprocessing text seperti saat training"""
+    """Preprocessing text seperti saat training - tanpa stopwords removal dulu"""
     text = str(text).lower()
     text = re.sub(r'http\S+', '', text)
     text = re.sub(r'@[A-Za-z0-9_]+', '', text)
@@ -362,105 +377,74 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-def predict_bully_sentence(text, model=None, tokenizer=tokenizer, maxlen=300, threshold=None):
+def remove_stopwords(text):
+    """Hapus stopwords dari text - HARUS dilakukan karena model di-train dengan stopwords removal"""
+    if not STOP_WORDS:
+        return text
+    return ' '.join([word for word in text.split() if word not in STOP_WORDS])
+
+def predict_cyberbullying(text, model=None, tokenizer=None, maxlen=300, threshold=None):
     """
-    Input: text (str)
-    Output: tuple (label_str, prob_float, cleaned_text, threshold_used)
+    Prediksi cyberbullying dari text.
+    
+    Input:
+        text: str - Text untuk diprediksi
+        model: model - Model TensorFlow (optional)
+        tokenizer: tokenizer - Keras Tokenizer (optional)
+        maxlen: int - Maximum sequence length (default 300)
+        threshold: float - Decision threshold (default BEST_THR_DEFAULT)
+    
+    Output:
+        tuple: (label, probability, cleaned_text)
+        - label: "BULLY" atau "NOT BULLY"
+        - probability: float 0.0-1.0 (prob model)
+        - cleaned_text: str (teks setelah cleaning)
     """
-    # pilih model: parameter > best_model > model_bal > coba load dari disk
+    
+    # Gunakan model global jika tidak diberikan
     if model is None:
-        model = globals().get('best_model') or globals().get('model_bal')
-        if model is None:
-            try:
-                model = load_model(MODEL_OUT)
-            except Exception:
-                try:
-                    model = load_model('models/model_terbaik.h5')
-                except Exception as e:
-                    raise RuntimeError("Tidak menemukan model di memori atau file. Pastikan model .h5 tersedia.") from e
-
-    # ambil threshold terbaik jika tersedia, fallback ke BEST_THR_DEFAULT
-    thr = threshold if threshold is not None else globals().get('best_thr', BEST_THR_DEFAULT)
-    try:
-        thr = float(thr)
-    except Exception:
-        thr = BEST_THR_DEFAULT
-
-    # preprocessing sesuai pipeline notebook
-    txt_clean = clean_text(text)
+        model = globals().get('model')
     
-    # PENTING: Jangan hapus stopwords untuk kata-kata bully!
-    # Stopwords removal bisa menghilangkan kata penting seperti "dasar", "tidak", dll
-    # Gunakan text yang sudah di-clean langsung
-    txt_for_model = txt_clean
-    
-    # Jika ingin tetap hapus stopwords, gunakan ini (tapi tidak disarankan):
-    # try:
-    #     from nltk.corpus import stopwords
-    #     stop_words = set(stopwords.words('indonesian')) | set(stopwords.words('english'))
-    #     # Jangan hapus kata-kata yang potensial bully
-    #     bully_keywords = {'tolol', 'bodoh', 'goblok', 'anjing', 'babi', 'kontol', 'bangsat', 'kampret'}
-    #     txt_for_model = ' '.join([w for w in txt_clean.split() if w not in stop_words or w in bully_keywords])
-    # except Exception:
-    #     txt_for_model = txt_clean
-
-    # Pastikan tokenizer dan pad_sequences tersedia
+    # Gunakan tokenizer global jika tidak diberikan
     if tokenizer is None:
-        raise RuntimeError("Tokenizer tidak tersedia. Pastikan tokenizer.pickle sudah dimuat dengan benar.")
+        tokenizer = globals().get('tokenizer') or globals().get('GLOBAL_TOKENIZER')
     
-    seq = tokenizer.texts_to_sequences([txt_for_model])
-    X = pad_sequences(seq, maxlen=maxlen, padding='post', truncating='post')
-
-    prob = float(model.predict(X, verbose=0).ravel()[0])
-    # Model output interpretation:
-    # prob is probability of SAFETY/NOT-BULLYING (0 to 1)
-    # prob > threshold → likely NOT BULLY (SAFE) 
-    # prob <= threshold → likely BULLY
-    label = "BULLY" if prob < thr else "NOT BULLY"
-
-    # DEBUG LOG
-    print(f"[PREDICT] text='{text}' -> prob_bully={prob:.4f}, thr={thr:.4f}, label={label}")
-
-    return label, prob, txt_clean, thr
-
-def predict_text(text, model=None, tokenizer=None, max_len=300, threshold=None):
-    """Prediksi cyberbullying dengan fallback model/threshold."""
-    # pilih threshold: prioritas argumen, lalu BEST_THR_DEFAULT (0.4), jangan default 0.5
+    # Ambil threshold dari parameter atau gunakan default
     if threshold is None:
-        threshold = params.get('threshold', BEST_THR_DEFAULT) if isinstance(params, dict) else BEST_THR_DEFAULT
+        threshold = globals().get('best_thr', BEST_THR_DEFAULT)
+    
     try:
         threshold = float(threshold)
-    except Exception:
+    except:
         threshold = BEST_THR_DEFAULT
-
-    # pilih model/tokenizer dari argumen; jika None, coba best_model / model_bal / load disk
-    if model is None or tokenizer is None:
-        m = globals().get('best_model') or globals().get('model_bal')
-        if m is None:
-            # coba load dari file yang umum dipakai
-            for cand in [
-                'models/model_terbaik.h5',
-                'model_terbaik.h5',
-                'models/best_lstm_final_balanced.h5',
-                'best_lstm_final_balanced.h5',
-                'models/best_cnn_bilstm_model.h5',
-                'best_cnn_bilstm_model.h5',
-            ]:
-                if os.path.exists(cand):
-                    try:
-                        m = load_model(cand)
-                        break
-                    except Exception:
-                        continue
-        model = model or m
-        tokenizer = tokenizer or globals().get('tokenizer')
-    print("DEBUG",m)
-    cleaned = clean_text(text)
-    sequence = tokenizer.texts_to_sequences([cleaned]) if tokenizer else [[0]]
-    padded = pad_sequences(sequence, maxlen=max_len, padding='post', truncating='post')
-    prob = float(model.predict(padded, verbose=0)[0][0]) if model else 0.1
-    prediction = 1 if prob >= threshold else 0
-    return prediction, prob, cleaned, threshold
+    
+    # Validasi model dan tokenizer tersedia
+    if model is None:
+        raise RuntimeError("❌ Model tidak tersedia. Pastikan best_lstm_final_balanced.h5 ada di direktori.")
+    if tokenizer is None:
+        raise RuntimeError("❌ Tokenizer tidak tersedia. Pastikan tokenizer_for_model_terbaik.pickle ada di direktori.")
+    
+    # Preprocessing
+    cleaned_text = clean_text(text)
+    # PENTING: Hapus stopwords seperti saat training di notebook
+    text_no_stopwords = remove_stopwords(cleaned_text)
+    
+    # Tokenisasi dan padding
+    sequences = tokenizer.texts_to_sequences([text_no_stopwords])
+    X = pad_sequences(sequences, maxlen=maxlen, padding='post', truncating='post')
+    
+    # Prediksi
+    prob = float(model.predict(X, verbose=0).ravel()[0])
+    
+    # Interpretasi model output:
+    # Output adalah probabilitas bully (0-1 dari sigmoid)
+    # prob >= threshold → BULLY
+    # prob < threshold → NOT BULLY
+    label = "BULLY" if prob >= threshold else "NOT BULLY"
+    
+    print(f"[PREDICT] text='{text[:50]}...' | prob={prob:.4f} | thr={threshold:.4f} | label={label}")
+    
+    return label, prob, cleaned_text
 
 # ==========================================
 # SIDEBAR NAVIGATION
@@ -591,19 +575,23 @@ elif page == "🔮 Prediksi":
     if st.session_state.get("first_load", True):
         if model and tokenizer:
             st.session_state.first_load = False
-            # Auto test dengan threshold 0.4 explicit
-            test_label, test_prob, _, test_thr = predict_bully_sentence(
-                "dongo",
-                model=model,
-                tokenizer=tokenizer,
-                maxlen=300,
-                threshold=BEST_THR_DEFAULT  # FORCE 0.4!
-            )
-            with st.sidebar:
-                if test_label == "BULLY":
-                    st.success(f"✓ 'dongo' detected as {test_label} (prob: {test_prob:.3f})")
-                else:
-                    st.warning(f"⚠ 'dongo' detected as {test_label} (prob: {test_prob:.3f}) - Expected BULLY!")
+            # Auto test dengan threshold optimal
+            try:
+                test_label, test_prob, _ = predict_cyberbullying(
+                    "dongo",
+                    model=model,
+                    tokenizer=tokenizer,
+                    maxlen=300,
+                    threshold=best_thr
+                )
+                with st.sidebar:
+                    if test_label == "BULLY":
+                        st.success(f"✓ 'dongo' detected as {test_label} (prob: {test_prob:.3f})")
+                    else:
+                        st.warning(f"⚠ 'dongo' detected as {test_label} (prob: {test_prob:.3f}) - Expected BULLY!")
+            except Exception as e:
+                with st.sidebar:
+                    st.error(f"⚠ Auto-test failed: {str(e)[:100]}")
     
     if model is None:
         st.error("⚠️ Model belum berhasil dimuat. Pastikan file model tersedia!")
@@ -623,13 +611,13 @@ elif page == "🔮 Prediksi":
         
         if predict_button and user_input:
             with st.spinner("Menganalisis komentar..."):
-                # Gunakan threshold 0.4 (BEST_THR_DEFAULT)
-                label_str, probability, cleaned_text, used_threshold = predict_bully_sentence(
+                # Gunakan threshold optimal dari model params
+                label_str, probability, cleaned_text = predict_cyberbullying(
                     user_input,
                     model=model,
                     tokenizer=tokenizer,
                     maxlen=300,
-                    threshold=BEST_THR_DEFAULT
+                    threshold=best_thr
                 )
                 is_bully = (label_str == "BULLY")
             
@@ -646,16 +634,16 @@ elif page == "🔮 Prediksi":
                     
                 with col_d2:
                     st.write("**Model Result:**")
-                    st.caption(f"Probability (SAFETY): {probability:.4f}")
-                    st.caption(f"Threshold: {used_threshold:.4f}")
+                    st.caption(f"Probability: {probability:.4f}")
+                    st.caption(f"Threshold: {best_thr:.4f}")
                     
                 with col_d3:
                     st.write("**Decision:**")
                     st.caption(f"Label: {label_str}")
                     if is_bully:
-                        st.caption("✓ BULLY (>= threshold)")
+                        st.caption(f"prob ({probability:.4f}) < thr ({best_thr:.4f})")
                     else:
-                        st.caption("✓ NOT BULLY (< threshold)")
+                        st.caption(f"prob ({probability:.4f}) >= thr ({best_thr:.4f})")
             
             # Result Section
             col1, col2, col3 = st.columns([1, 2, 1])

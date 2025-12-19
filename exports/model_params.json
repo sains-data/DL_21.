@@ -1,0 +1,42 @@
+{
+  "vocab_size": 17935,
+  "maxlen": 300,
+  "embedding_dim": 100,
+  "threshold": 0.4,
+  "model_type": "CNN-BiLSTM",
+  "architecture": {
+    "embedding_dim": 100,
+    "conv_filters": 128,
+    "conv_kernel_size": 5,
+    "lstm_units": 64,
+    "lstm_dropout": 0.3,
+    "dense_units": 64,
+    "dense_dropout": 0.3,
+    "max_sequence_length": 300
+  },
+  "training_info": {
+    "balanced_data": true,
+    "class_weights": {
+      "0": 0.7,
+      "1": 1.75
+    },
+    "loss_function": "focal_loss",
+    "optimizer": "adam",
+    "epochs_trained": 7,
+    "early_stopping": true
+  },
+  "performance_metrics": {
+    "accuracy": 0.8402,
+    "precision": 0.7318,
+    "recall": 0.6958,
+    "f1_score": 0.7134,
+    "roc_auc": 0.8676
+  },
+  "preprocessing": {
+    "clean_text": true,
+    "remove_stopwords": true,
+    "tokenization": "keras_tokenizer",
+    "padding_type": "post",
+    "truncating": "post"
+  }
+}
